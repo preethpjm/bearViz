@@ -12,8 +12,7 @@ from colorthief import ColorThief
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not API_KEY:
-    st.error("❌ Missing API Key! Set GEMINI_API_KEY as an environment variable.")
-    st.stop()  # Stop execution if API key is missing
+    raise ValueError("❌ Missing API Key! Set GEMINI_API_KEY in GitHub Secrets.")
 
 # 🔹 Configure Gemini AI
 genai.configure(api_key=API_KEY)
