@@ -8,11 +8,8 @@ import re
 import os
 from colorthief import ColorThief
 
-# 🔹 Load API key securely from environment variable
-API_KEY = os.getenv("GEMINI_API_KEY")
-
-if not API_KEY:
-    raise ValueError("❌ Missing API Key! Set GEMINI_API_KEY in GitHub Secrets.")
+# 🔹 Load API key securely from Streamlit Secrets (Better for Cloud Deployment)
+API_KEY = st.secrets["GEMINI_API_KEY"]  # Ensure it's set in Streamlit Secrets
 
 # 🔹 Configure Gemini AI
 genai.configure(api_key=API_KEY)
@@ -46,13 +43,23 @@ file_name = None
 
 if uploaded_file:
     file_name = uploaded_file.name
-    df = pd.read_csv(uploaded_file) if file_name.endswith(".csv") else pd.read_excel(uploaded_file)
+    file_path = os.path.join("data", file_name)  # Save in 'data/' directory
+    os.makedirs("data", exist_ok=True)  # Ensure directory exists
+
+    # Save uploaded file locally
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    df = pd.read_csv(file_path) if file_name.endswith(".csv") else pd.read_excel(file_path)
+
 elif api_url:
     try:
         response = requests.get(api_url)
         response.raise_for_status()
         df = pd.DataFrame(response.json())
         file_name = "live_data.csv"
+        file_path = os.path.join("data", file_name)
+        df.to_csv(file_path, index=False)  # Save API data for processing
     except Exception as e:
         st.error(f"❌ API Fetch Failed: {e}")
 
@@ -74,14 +81,14 @@ if df is not None and not df.empty:
 
         The user wants to analyze: "{problem_statement}"
 
-        The dataset file is: "{file_name}" (use this exact filename in the code)
+        The dataset file is: "{file_path}" (use this exact filename in the code)
 
         Generate a Python script that:
         - Loads the dataset correctly using pandas
         - Uses Matplotlib/Seaborn to generate the best visualization
         - Applies the given color palette: {color_palette}
         - Saves the plot as 'visualization.png'
-        - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_name}" exactly.
+        - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
         - Do NOT include explanations or Markdown formatting, only return runnable Python code.
         """
 
@@ -107,11 +114,6 @@ if df is not None and not df.empty:
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(generated_code)
 
-            # 🔹 Check if dataset exists before running the script
-            if not os.path.exists(file_name):
-                st.error(f"❌ Error: The dataset '{file_name}' was not found.")
-                st.stop()
-
             # 🔹 Run the script safely
             try:
                 exec(open(script_path).read(), globals())
@@ -127,3 +129,4 @@ if df is not None and not df.empty:
 
         except Exception as e:
             st.error(f"❌ Error generating visualization: {e}")
+
