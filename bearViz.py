@@ -7,6 +7,7 @@ import re
 import os
 import pdfplumber
 from colorthief import ColorThief
+import random
 
 # 🔹 Load API key securely from Streamlit Secrets
 API_KEY = st.secrets["GEMINI_API_KEY"]  # Ensure it's set in Streamlit Secrets
@@ -23,25 +24,6 @@ uploaded_file = st.file_uploader("Upload CSV, Excel, TXT, or PDF File", type=["c
 
 # 🔹 API Data Fetching
 api_url = st.text_input("Enter API URL for Live Data")
-
-# 🔹 Image Upload for Color Extraction
-uploaded_image = st.file_uploader("Upload an Image for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
-
-# 🔹 Extract Color Theme
-def extract_colors(image):
-    color_thief = ColorThief(image)
-    palette = color_thief.get_palette(color_count=5)
-    return ["#{:02x}{:02x}{:02x}".format(*color) for color in palette]
-
-color_palette = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]
-if uploaded_image:
-    color_palette = extract_colors(uploaded_image)
-    st.write("🎨 **Extracted Colors:**")
-    color_html = "".join(
-        f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>"
-        for color in color_palette
-    )
-    st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
 
 # 🔹 Load Data from File or API
 df = None
@@ -98,48 +80,58 @@ if df is not None and not df.empty:
 
         The dataset file is: "{file_path}" (use this exact filename in the code)
 
-        Generate a **Python script** that:
-        - Loads the dataset using pandas
-        - Uses **Plotly** to create an **interactive visualization**
-        - Enables **hover tooltips** with dynamically relevant units (like currency, count, percentage)
-        - Uses `plotly.express` and **returns a `fig` object instead of saving an image**
-        - Uses the given color palette: {color_palette}
-        - **Do NOT save the figure as an image**; just return `fig`
+        Generate a Python script that:
+        - Loads the dataset correctly using pandas
+        - Uses Plotly to generate an **interactive visualization**
+        - Includes **hover tooltips** that dynamically display relevant **units** (like currency, count, percentage)
+        - Applies a color palette that will be determined dynamically after code generation
+        - Saves the plot as 'visualization.png'
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
         - Do NOT include explanations or Markdown formatting, only return runnable Python code.
         """
 
         try:
             response = model.generate_content(query)
-
-            # 🔹 Ensure the response contains valid code
-            if not response or not hasattr(response, "text") or not response.text.strip():
-                st.error("❌ Gemini AI did not return valid Python code.")
-                st.stop()
-
             generated_code = response.text.strip()
-
-            # 🔹 Clean unwanted Markdown formatting
             generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
             generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
-
-            # 🔹 Print generated code for debugging
-            print("\n🔹 Generated Python Code:\n", generated_code)
 
             # 🔹 Save the code safely
             script_path = "generated_visualization.py"
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(generated_code)
 
-            # 🔹 Execute the script & retrieve the Plotly figure dynamically
-            local_vars = {}
-            exec(generated_code, globals(), local_vars)
+            # 🔹 Run the script safely
+            try:
+                exec(open(script_path).read(), globals())
 
-            # 🔹 Extract `fig` from the executed script
-            if "fig" in local_vars:
-                st.plotly_chart(local_vars["fig"], use_container_width=True)
-            else:
-                st.error("❌ The generated code did not return a valid Plotly figure.")
+                # 🔹 Prompt for Image Upload After Code Generation
+                uploaded_image = st.file_uploader("Upload an Image for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
+
+                # 🔹 Extract Color Theme
+                def extract_colors(image, num_colors):
+                    color_thief = ColorThief(image)
+                    palette = color_thief.get_palette(color_count=num_colors)
+                    return ["#{:02x}{:02x}{:02x}".format(*color) for color in palette]
+
+                default_colors = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]
+                required_colors = 5  # This should be dynamically inferred from the visualization
+
+                if uploaded_image:
+                    extracted_colors = extract_colors(uploaded_image, min(required_colors, 5))
+                    if len(extracted_colors) < required_colors:
+                        additional_colors = ["#{:02x}{:02x}{:02x}".format(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in range(required_colors - len(extracted_colors))]
+                        extracted_colors.extend(additional_colors)
+                    color_palette = extracted_colors
+                else:
+                    color_palette = default_colors
+
+                st.write("🎨 **Selected Color Palette:**")
+                color_html = "".join(f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>" for color in color_palette)
+                st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
+
+            except Exception as e:
+                st.error(f"❌ Error executing generated script: {e}")
 
         except Exception as e:
             st.error(f"❌ Error generating visualization: {e}")
