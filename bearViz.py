@@ -35,7 +35,13 @@ def extract_colors(image):
 color_palette = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]  # Default Colors
 if uploaded_image:
     color_palette = extract_colors(uploaded_image)
-    st.write("🎨 Extracted Colors:", color_palette)
+    st.write("🎨 **Extracted Colors:**")
+    # Create color swatch display using Markdown & HTML
+    color_html = "".join(
+        f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>"
+        for color in color_palette
+    )
+    st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
 
 # 🔹 Load Data from File or API
 df = None
