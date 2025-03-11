@@ -9,12 +9,11 @@ import os
 from colorthief import ColorThief
 
 # 🔹 Load API key securely from environment variable
-API_KEY = os.environ.get("GEMINI_API_KEY")  # Load from Repository Variable
+API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not API_KEY:
-    raise ValueError("❌ Missing API Key! Set GEMINI_API_KEY in GitHub Repository Variables.")
-else:
-    print(f"✅ API Key Loaded Successfully: {API_KEY[:5]}*****")  # Mask for security
+    raise ValueError("❌ Missing API Key! Set GEMINI_API_KEY in GitHub Secrets.")
+
 # 🔹 Configure Gemini AI
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
