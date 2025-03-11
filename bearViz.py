@@ -28,25 +28,31 @@ api_url = st.text_input("Enter API URL for Live Data")
 # 🔹 Image Upload for Color Extraction (BEFORE Visualization Generation)
 uploaded_image = st.file_uploader("Upload an Image for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
 
-# 🔹 Function to Extract Colors and Generate Additional Colors if Needed
+# 🔹 Function to Extract Colors & Generate Additional Colors If Needed
 def extract_colors(image, required_colors):
     color_thief = ColorThief(image)
     extracted_colors = color_thief.get_palette(color_count=min(required_colors, 10))  # Extract up to 10 colors
     extracted_hex = ["#{:02x}{:02x}{:02x}".format(*color) for color in extracted_colors]
 
-    # If more colors are needed, generate random ones
+    # If more colors are needed, generate **harmonious colors**
     while len(extracted_hex) < required_colors:
-        random_color = "#{:02x}{:02x}{:02x}".format(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        extracted_hex.append(random_color)
+        base_color = extracted_hex[len(extracted_hex) % len(extracted_hex)]  # Pick from extracted colors
+        new_color = "#{:02x}{:02x}{:02x}".format(
+            (int(base_color[1:3], 16) + random.randint(20, 50)) % 256,
+            (int(base_color[3:5], 16) + random.randint(20, 50)) % 256,
+            (int(base_color[5:7], 16) + random.randint(20, 50)) % 256
+        )
+        extracted_hex.append(new_color)
 
     return extracted_hex[:required_colors]  # Return only the required number of colors
 
 # 🔹 Default Color Palette (If No Image Is Uploaded)
-color_palette = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]
+color_palette = st.session_state.get("color_palette", ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"])
 
 if uploaded_image:
-    required_colors = 5  # Set dynamically later based on visualization needs
+    required_colors = 8  # Dynamically adjust later based on visualization needs
     color_palette = extract_colors(uploaded_image, required_colors)
+    st.session_state["color_palette"] = color_palette  # Store in session state
 
     st.write("🎨 **Extracted Colors:**")
     color_html = "".join(
@@ -73,7 +79,7 @@ if uploaded_file:
     elif file_name.endswith((".xlsx", ".xls")):
         df = pd.read_excel(file_path)
     elif file_name.endswith(".txt"):
-        df = pd.read_csv(file_path, delimiter="\t", encoding="utf-8", error_bad_lines=False)
+        df = pd.read_csv(file_path, delimiter="\t", encoding="utf-8", on_bad_lines="skip")
     elif file_name.endswith(".pdf"):
         with pdfplumber.open(file_path) as pdf:
             all_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
