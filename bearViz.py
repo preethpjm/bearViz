@@ -8,13 +8,8 @@ import re
 import os
 from colorthief import ColorThief
 
-# 🔹 Load API key from environment variable
-API_KEY = os.getenv("GEMINI_API_KEY")
-
-if not API_KEY:
-    raise ValueError("❌ Missing API Key! Set GEMINI_API_KEY as an environment variable.")
-
-genai.configure(api_key=API_KEY)
+# 🔹 Configure Gemini AI
+genai.configure(api_key="AIzaSyBY_NygxPdVVWfTp5wH_cuhdUp26H7WqTg")  # Replace with your actual API key
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
 st.title("📊 AI-Powered Data Visualization")
