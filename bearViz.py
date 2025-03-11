@@ -100,7 +100,8 @@ if df is not None and not df.empty:
 
         Generate a Python script that:
         - Loads the dataset correctly using pandas
-        - Uses Plotly to generate the best interactive visualization
+        - Uses Plotly to generate an **interactive visualization**
+        - Includes **hover tooltips** that dynamically display relevant **units** (like currency, count, percentage)
         - Applies the given color palette: {color_palette}
         - Saves the plot as 'visualization.png'
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
