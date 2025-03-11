@@ -5,29 +5,21 @@ import plotly.express as px
 import requests
 import re
 import os
-import subprocess
+import pdfplumber
 from colorthief import ColorThief
 
-# 🔹 Ensure required dependencies are installed
-required_packages = ["pandas", "plotly", "matplotlib", "seaborn", "google-generativeai"]
-for package in required_packages:
-    try:
-        __import__(package)
-    except ImportError:
-        subprocess.run(["pip", "install", package], check=True)
-
-# 🔹 Load API key from Streamlit Secrets
-API_KEY = st.secrets["GEMINI_API_KEY"]
+# 🔹 Load API key securely from Streamlit Secrets
+API_KEY = st.secrets["GEMINI_API_KEY"]  # Ensure it's set in Streamlit Secrets
 
 # 🔹 Configure Gemini AI
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
-# 🔹 Title with BearViz Logo
-st.markdown("<h1 style='text-align: center;'>🐻📊 <b>BearViz - AI-Powered Dashboard</b></h1>", unsafe_allow_html=True)
+# 🔹 Title
+st.title("🐻📊 **BearViz - AI-Powered Data Visualization**")
 
 # 🔹 File Upload
-uploaded_file = st.file_uploader("Upload CSV or Excel File", type=["csv", "xlsx"])
+uploaded_file = st.file_uploader("Upload CSV, Excel, TXT, or PDF File", type=["csv", "xlsx", "txt", "pdf"])
 
 # 🔹 API Data Fetching
 api_url = st.text_input("Enter API URL for Live Data")
@@ -35,7 +27,7 @@ api_url = st.text_input("Enter API URL for Live Data")
 # 🔹 Image Upload for Color Extraction
 uploaded_image = st.file_uploader("Upload an Image for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
 
-# 🔹 Extract Color Palette
+# 🔹 Extract Color Theme
 def extract_colors(image):
     color_thief = ColorThief(image)
     palette = color_thief.get_palette(color_count=5)
@@ -59,9 +51,21 @@ if uploaded_file:
     file_name = uploaded_file.name
     file_path = os.path.join("data", file_name)
     os.makedirs("data", exist_ok=True)
+
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
-    df = pd.read_csv(file_path) if file_name.endswith(".csv") else pd.read_excel(file_path)
+
+    # **Read Different File Types**
+    if file_name.endswith(".csv"):
+        df = pd.read_csv(file_path)
+    elif file_name.endswith((".xlsx", ".xls")):
+        df = pd.read_excel(file_path)
+    elif file_name.endswith(".txt"):
+        df = pd.read_csv(file_path, delimiter="\t", encoding="utf-8", error_bad_lines=False)
+    elif file_name.endswith(".pdf"):
+        with pdfplumber.open(file_path) as pdf:
+            all_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
+        df = pd.DataFrame({"Extracted_Text": all_text.split("\n")})  # Convert text into DataFrame
 
 elif api_url:
     try:
@@ -74,75 +78,69 @@ elif api_url:
     except Exception as e:
         st.error(f"❌ API Fetch Failed: {e}")
 
-# 🔹 Generate Dashboard if Data is Loaded
+# 🔹 If Data is Loaded, Display & Analyze
 if df is not None and not df.empty:
     st.write("### Dataset Preview")
     st.dataframe(df.head())
 
-    # 🔹 Accept multiple problem statements for dashboard
-    st.write("📝 **Enter Your Analysis Questions** (One per line)")
-    problem_statements = st.text_area("Example: Sales vs Region, Region vs Sale Category").split("\n")
+    # 🔹 Ask for Problem Statement
+    problem_statement = st.text_input("What do you want to analyze?", "Example: Sales trend over time")
 
-    if st.button("Generate Dashboard"):
-        st.write("📡 Generating multiple visualizations...")
+    if st.button("Generate Visualization"):
+        st.write("📡 Sending request to Gemini AI...")
 
-        col1, col2 = st.columns(2)  # Two-column layout for dashboard
-
-        # 🔹 Single Optimized API Call for Multiple Plots
+        # 🔹 Generate Visualization Using Gemini AI
         query = f"""
         Given this dataset summary:
         {df.describe().to_string()}
 
-        The user wants to analyze:
-        {problem_statements}
+        The user wants to analyze: "{problem_statement}"
 
-        Generate Python scripts that:
-        - MUST contain only valid Python code (NO Markdown, NO explanations, NO extra text)
-        - Load the dataset correctly using pandas
-        - Use Plotly to create interactive visualizations
-        - Save plots as 'visualization_1.png', 'visualization_2.png', etc.
-        - If running in Streamlit, use st.plotly_chart(fig) instead of saving images
-        - Avoid using Markdown-style comments or explanations
+        The dataset file is: "{file_path}" (use this exact filename in the code)
+
+        Generate a Python script that:
+        - Loads the dataset correctly using pandas
+        - Uses Plotly to generate the best interactive visualization
+        - Applies the given color palette: {color_palette}
+        - Saves the plot as 'visualization.png'
+        - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
+        - Do NOT include explanations or Markdown formatting, only return runnable Python code.
         """
 
         try:
             response = model.generate_content(query)
 
+            # 🔹 Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
                 st.error("❌ Gemini AI did not return valid Python code.")
                 st.stop()
 
-            generated_codes = response.text.strip().split("```python")[1:]  # Extract multiple code blocks
+            generated_code = response.text.strip()
 
-            for i, code_block in enumerate(generated_codes):
-                generated_code = code_block.strip().replace("```", "")
+            # 🔹 Clean unwanted Markdown formatting
+            generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
+            generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
-                # 🔹 Remove Markdown or Textual Explanations
-                generated_code = re.sub(r"\*\*.*?\*\*", "", generated_code)  # Remove **bold text**
-                generated_code = re.sub(r"#.*", "", generated_code)  # Remove comments
-                generated_code = generated_code.strip()
+            # 🔹 Print generated code for debugging
+            print("\n🔹 Generated Python Code:\n", generated_code)
 
-                if "import pandas as pd" not in generated_code:
-                    generated_code = "import pandas as pd\nimport plotly.express as px\n" + generated_code
+            # 🔹 Save the code safely
+            script_path = "generated_visualization.py"
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(generated_code)
 
-                script_path = f"generated_viz_{i}.py"
-                with open(script_path, "w", encoding="utf-8") as f:
-                    f.write(generated_code)
+            # 🔹 Run the script safely
+            try:
+                exec(open(script_path).read(), globals())
 
-                # 🔹 Run each script separately
-                try:
-                    subprocess.run(["python", script_path], check=True)
+                # 🔹 Display the Visualization
+                if os.path.exists("visualization.png"):
+                    st.image("visualization.png", caption="Generated Visualization", use_container_width=True)
+                else:
+                    st.error("❌ The visualization was not generated successfully.")
 
-                    # 🔹 Display the visualization
-                    image_path = f"visualization_{i}.png"
-                    if os.path.exists(image_path):
-                        with (col1 if i % 2 == 0 else col2):  # Alternate columns
-                            st.image(image_path, caption=f"Visualization {i+1}", use_container_width=True)
-                    else:
-                        st.error(f"❌ Visualization failed for analysis {i+1}")
-
-                except subprocess.CalledProcessError as e:
-                    st.error(f"❌ Error executing visualization {i+1}: {e}")
+            except Exception as e:
+                st.error(f"❌ Error executing generated script: {e}")
 
         except Exception as e:
             st.error(f"❌ Error generating visualization: {e}")
