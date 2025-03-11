@@ -55,6 +55,7 @@ if uploaded_file:
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
+    # **Read Different File Types**
     if file_name.endswith(".csv"):
         df = pd.read_csv(file_path)
     elif file_name.endswith((".xlsx", ".xls")):
@@ -64,7 +65,7 @@ if uploaded_file:
     elif file_name.endswith(".pdf"):
         with pdfplumber.open(file_path) as pdf:
             all_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
-        df = pd.DataFrame({"Extracted_Text": all_text.split("\n")})
+        df = pd.DataFrame({"Extracted_Text": all_text.split("\n")})  # Convert text into DataFrame
 
 elif api_url:
     try:
@@ -97,13 +98,13 @@ if df is not None and not df.empty:
 
         The dataset file is: "{file_path}" (use this exact filename in the code)
 
-        Generate a Python script that:
-        - Loads the dataset correctly using pandas
-        - Uses Plotly to generate an **interactive visualization**
-        - Includes **hover tooltips** that dynamically display relevant **units** (like currency, count, percentage)
-        - Ensures tooltips display relevant column names and values dynamically
-        - Applies the given color palette: {color_palette}
-        - Saves the plot as 'visualization.png'
+        Generate a **Python script** that:
+        - Loads the dataset using pandas
+        - Uses **Plotly** to create an **interactive visualization**
+        - Enables **hover tooltips** with dynamically relevant units (like currency, count, percentage)
+        - Uses `plotly.express` and **returns a `fig` object instead of saving an image**
+        - Uses the given color palette: {color_palette}
+        - **Do NOT save the figure as an image**; just return `fig`
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
         - Do NOT include explanations or Markdown formatting, only return runnable Python code.
         """
@@ -111,30 +112,34 @@ if df is not None and not df.empty:
         try:
             response = model.generate_content(query)
 
+            # 🔹 Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
                 st.error("❌ Gemini AI did not return valid Python code.")
                 st.stop()
 
             generated_code = response.text.strip()
+
+            # 🔹 Clean unwanted Markdown formatting
             generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
             generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
+            # 🔹 Print generated code for debugging
             print("\n🔹 Generated Python Code:\n", generated_code)
 
+            # 🔹 Save the code safely
             script_path = "generated_visualization.py"
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(generated_code)
 
-            try:
-                exec(open(script_path).read(), globals())
+            # 🔹 Execute the script & retrieve the Plotly figure dynamically
+            local_vars = {}
+            exec(generated_code, globals(), local_vars)
 
-                if os.path.exists("visualization.png"):
-                    st.image("visualization.png", caption="Generated Visualization", use_container_width=True)
-                else:
-                    st.error("❌ The visualization was not generated successfully.")
-
-            except Exception as e:
-                st.error(f"❌ Error executing generated script: {e}")
+            # 🔹 Extract `fig` from the executed script
+            if "fig" in local_vars:
+                st.plotly_chart(local_vars["fig"], use_container_width=True)
+            else:
+                st.error("❌ The generated code did not return a valid Plotly figure.")
 
         except Exception as e:
             st.error(f"❌ Error generating visualization: {e}")
