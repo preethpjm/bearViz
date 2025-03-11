@@ -8,7 +8,7 @@ import os
 import subprocess
 from colorthief import ColorThief
 
-# 🔹 Install required dependencies automatically
+# 🔹 Ensure required dependencies are installed
 required_packages = ["pandas", "plotly", "matplotlib", "seaborn", "google-generativeai"]
 for package in required_packages:
     try:
@@ -16,7 +16,7 @@ for package in required_packages:
     except ImportError:
         subprocess.run(["pip", "install", package], check=True)
 
-# 🔹 Load API key securely from Streamlit Secrets
+# 🔹 Load API key from Streamlit Secrets
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # 🔹 Configure Gemini AI
@@ -88,27 +88,26 @@ if df is not None and not df.empty:
 
         col1, col2 = st.columns(2)  # Two-column layout for dashboard
 
-        # 🔹 Combine all problems into a single API call (Optimized)
+        # 🔹 Single Optimized API Call for Multiple Plots
         query = f"""
         Given this dataset summary:
         {df.describe().to_string()}
 
-        The user wants to analyze the following:
+        The user wants to analyze:
         {problem_statements}
 
         Generate Python scripts that:
-        - Only contain executable Python code (NO Markdown, NO explanations)
+        - MUST contain only valid Python code (NO Markdown, NO explanations, NO extra text)
         - Load the dataset correctly using pandas
         - Use Plotly to create interactive visualizations
-        - Save the plots as 'visualization_1.png', 'visualization_2.png', etc.
+        - Save plots as 'visualization_1.png', 'visualization_2.png', etc.
+        - If running in Streamlit, use st.plotly_chart(fig) instead of saving images
         - Avoid using Markdown-style comments or explanations
-        - The script must be complete and executable as a standalone Python file
         """
 
         try:
             response = model.generate_content(query)
 
-            # 🔹 Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
                 st.error("❌ Gemini AI did not return valid Python code.")
                 st.stop()
@@ -118,20 +117,23 @@ if df is not None and not df.empty:
             for i, code_block in enumerate(generated_codes):
                 generated_code = code_block.strip().replace("```", "")
 
-                # Ensure the code does not contain Markdown formatting
-                if "**" in generated_code or "#" in generated_code:
-                    st.error(f"❌ Generated code for visualization {i+1} contains Markdown/explanations. Skipping execution.")
-                    continue
+                # 🔹 Remove Markdown or Textual Explanations
+                generated_code = re.sub(r"\*\*.*?\*\*", "", generated_code)  # Remove **bold text**
+                generated_code = re.sub(r"#.*", "", generated_code)  # Remove comments
+                generated_code = generated_code.strip()
+
+                if "import pandas as pd" not in generated_code:
+                    generated_code = "import pandas as pd\nimport plotly.express as px\n" + generated_code
 
                 script_path = f"generated_viz_{i}.py"
                 with open(script_path, "w", encoding="utf-8") as f:
                     f.write(generated_code)
 
-                # 🔹 Run each script as a separate process
+                # 🔹 Run each script separately
                 try:
                     subprocess.run(["python", script_path], check=True)
 
-                    # 🔹 Display the generated visualization
+                    # 🔹 Display the visualization
                     image_path = f"visualization_{i}.png"
                     if os.path.exists(image_path):
                         with (col1 if i % 2 == 0 else col2):  # Alternate columns
