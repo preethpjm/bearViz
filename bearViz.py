@@ -6,6 +6,7 @@ import requests
 import re
 import os
 from colorthief import ColorThief
+import subprocess
 
 # 🔹 Load API key securely from Streamlit Secrets
 API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -77,7 +78,6 @@ if df is not None and not df.empty:
         st.write("📡 Generating multiple visualizations...")
 
         col1, col2 = st.columns(2)  # Two-column layout for dashboard
-
         for i, problem in enumerate(problem_statements):
             problem = problem.strip()
             if not problem:
@@ -85,7 +85,6 @@ if df is not None and not df.empty:
 
             st.subheader(f"📊 {problem}")
 
-            # 🔹 Generate code for each visualization using Gemini AI
             query = f"""
             Given this dataset summary:
             {df.describe().to_string()}
@@ -95,7 +94,7 @@ if df is not None and not df.empty:
             Generate a Python script that:
             - Loads the dataset correctly using pandas
             - Uses Plotly to create an interactive visualization
-            - Saves the plot as 'visualization.png' OR renders directly in Streamlit
+            - Saves the plot as 'visualization_{i}.png' OR renders directly in Streamlit
             - Do NOT assume specific column names; infer them dynamically
             - Avoid Markdown formatting, only return raw Python code.
             """
@@ -117,14 +116,15 @@ if df is not None and not df.empty:
                 with open(script_path, "w", encoding="utf-8") as f:
                     f.write(generated_code)
 
-                # 🔹 Run the generated script
+                # 🔹 Run each script as a separate process
                 try:
-                    exec(open(script_path).read(), globals())
+                    subprocess.run(["python", script_path], check=True)
 
                     # 🔹 Display the generated visualization
-                    if os.path.exists("visualization.png"):
+                    image_path = f"visualization_{i}.png"
+                    if os.path.exists(image_path):
                         with (col1 if i % 2 == 0 else col2):  # Alternate columns
-                            st.image("visualization.png", caption=problem, use_container_width=True)
+                            st.image(image_path, caption=problem, use_container_width=True)
                     else:
                         st.error(f"❌ Visualization failed for '{problem}'")
 
@@ -133,3 +133,4 @@ if df is not None and not df.empty:
 
             except Exception as e:
                 st.error(f"❌ Error generating visualization: {e}")
+
