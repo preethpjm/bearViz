@@ -15,7 +15,7 @@ API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
-st.title("🐻📊 **BearViz - AI-Powered Dashboard**")
+st.title("🐻📊 **BearViz**")
 
 # 🔹 File Upload
 uploaded_file = st.file_uploader("Upload CSV or Excel File", type=["csv", "xlsx"])
@@ -72,51 +72,45 @@ if df is not None and not df.empty:
 
     # 🔹 Accept multiple problem statements for dashboard
     st.write("📝 **Enter Your Analysis Questions** (One per line)")
-    problem_statements = st.text_area("Example: Sales vs Region, Region vs Sale Category").split("\n")
+    problem_statements = st.text_area("Example: Sales vs Region, Region vs Sale Category").strip().split("\n")
 
     if st.button("Generate Dashboard"):
         st.write("📡 Generating multiple visualizations...")
 
-        col1, col2 = st.columns(2)  # Two-column layout for dashboard
-        for i, problem in enumerate(problem_statements):
-            problem = problem.strip()
-            if not problem:
-                continue
+        # 🔹 Single API Call for All Visualizations
+        query = f"""
+        Given this dataset summary:
+        {df.describe().to_string()}
 
-            st.subheader(f"📊 {problem}")
+        The user wants to analyze the following:
+        {problem_statements}
 
-            query = f"""
-            Given this dataset summary:
-            {df.describe().to_string()}
+        Generate Python scripts that:
+        - Load the dataset correctly using pandas
+        - Use Plotly to create interactive visualizations
+        - Save the plots as 'visualization_1.png', 'visualization_2.png', etc.
+        - Return multiple Python code blocks for each visualization.
+        """
 
-            The user wants to analyze: "{problem}"
+        try:
+            response = model.generate_content(query)
 
-            Generate a Python script that:
-            - Loads the dataset correctly using pandas
-            - Uses Plotly to create an interactive visualization
-            - Saves the plot as 'visualization_{i}.png' OR renders directly in Streamlit
-            - Do NOT assume specific column names; infer them dynamically
-            - Avoid Markdown formatting, only return raw Python code.
-            """
+            if not response or not hasattr(response, "text") or not response.text.strip():
+                st.error("❌ No valid code returned from Gemini AI")
+                st.stop()
 
-            try:
-                response = model.generate_content(query)
+            generated_codes = response.text.strip().split("```python")[1:]  # Extract multiple code blocks
 
-                if not response or not hasattr(response, "text") or not response.text.strip():
-                    st.error(f"❌ No valid code returned for '{problem}'")
-                    continue
+            # 🔹 Generate and Execute Multiple Visualizations
+            col1, col2 = st.columns(2)  # Dashboard Layout
+            for i, code_block in enumerate(generated_codes):
+                generated_code = code_block.strip().replace("```", "")
 
-                generated_code = response.text.strip()
-
-                # 🔹 Clean the code from Markdown artifacts
-                generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
-                generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
-
-                script_path = f"generated_{problem.replace(' ', '_')}.py"
+                script_path = f"generated_viz_{i}.py"
                 with open(script_path, "w", encoding="utf-8") as f:
                     f.write(generated_code)
 
-                # 🔹 Run each script as a separate process
+                # 🔹 Run each script separately
                 try:
                     subprocess.run(["python", script_path], check=True)
 
@@ -124,13 +118,12 @@ if df is not None and not df.empty:
                     image_path = f"visualization_{i}.png"
                     if os.path.exists(image_path):
                         with (col1 if i % 2 == 0 else col2):  # Alternate columns
-                            st.image(image_path, caption=problem, use_container_width=True)
+                            st.image(image_path, caption=f"Visualization {i+1}", use_container_width=True)
                     else:
-                        st.error(f"❌ Visualization failed for '{problem}'")
+                        st.error(f"❌ Visualization failed for analysis {i+1}")
 
                 except Exception as e:
-                    st.error(f"❌ Error executing script for '{problem}': {e}")
+                    st.error(f"❌ Error executing visualization {i+1}: {e}")
 
-            except Exception as e:
-                st.error(f"❌ Error generating visualization: {e}")
-
+        except Exception as e:
+            st.error(f"❌ Error generating dashboard: {e}")
