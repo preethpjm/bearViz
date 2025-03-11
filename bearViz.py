@@ -109,13 +109,13 @@ if df is not None and not df.empty:
             exec(generated_code, globals(), local_vars)
 
             if "fig" in local_vars:
-                # 🔹 Now Prompt for Image Upload
+                # 🔹 **Now Prompt for Image Upload BEFORE Rendering Visualization**
                 uploaded_image = st.file_uploader("Upload an Image for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
 
                 # 🔹 Extract Color Theme Dynamically
                 def extract_colors(image, required_colors):
                     color_thief = ColorThief(image)
-                    full_palette = color_thief.get_palette(color_count=10)  # Extract up to 10 colors
+                    full_palette = color_thief.get_palette(color_count=min(required_colors, 10))  # Extract up to 10 colors
                     extracted_colors = ["#{:02x}{:02x}{:02x}".format(*color) for color in full_palette]
 
                     if len(extracted_colors) >= required_colors:
@@ -131,7 +131,7 @@ if df is not None and not df.empty:
 
                     return extracted_colors + additional_colors[len(extracted_colors):]
 
-                # 🔹 Apply Dynamic Colors
+                # 🔹 Determine Required Colors **Before Displaying the Visualization**
                 required_colors = len(local_vars["fig"].data)  # Number of traces in the plot
                 color_palette = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]  # Default colors
 
@@ -144,7 +144,7 @@ if df is not None and not df.empty:
                     )
                     st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
 
-                # 🔹 Update Figure with Colors
+                # 🔹 Update Figure with Colors **Before Rendering**
                 for i, trace in enumerate(local_vars["fig"].data):
                     trace.marker.color = color_palette[i % len(color_palette)]  # Cycle colors if needed
 
