@@ -15,7 +15,7 @@ API_KEY = st.secrets["GEMINI_API_KEY"]  # Ensure it's set in Streamlit Secrets
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
-st.title("📊 AI-Powered Data Visualization")
+st.title("🐻📊 **BearViz**")
 
 # 🔹 File Upload
 uploaded_file = st.file_uploader("Upload CSV or Excel File", type=["csv", "xlsx"])
@@ -113,7 +113,7 @@ if df is not None and not df.empty:
             generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
             # 🔹 Print generated code for debugging
-            st.text_area("Generated Code", generated_code, height=250)
+            print("\n🔹 Generated Python Code:\n", generated_code)
 
             # 🔹 Save the code safely
             script_path = "generated_visualization.py"
@@ -126,7 +126,7 @@ if df is not None and not df.empty:
 
                 # 🔹 Display the Visualization
                 if os.path.exists("visualization.png"):
-                    st.image("visualization.png", caption="Generated Visualization", use_column_width=True)
+                    st.image("visualization.png", caption="Generated Visualization", use_container_width=True)
                 else:
                     st.error("❌ The visualization was not generated successfully.")
 
