@@ -4,11 +4,12 @@ import google.generativeai as genai
 import matplotlib.pyplot as plt
 import seaborn as sns
 import requests
-from colorthief import ColorThief
+import re
 import os
+from colorthief import ColorThief
 
 # 🔹 Configure Gemini AI
-genai.configure(api_key="AIzaSyBY_NygxPdVVWfTp5wH_cuhdUp26H7WqTg")  # Replace with actual API key
+genai.configure(api_key="YOUR_GOOGLE_GEMINI_API_KEY")  # Replace with your actual API key
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
 st.title("📊 AI-Powered Data Visualization")
@@ -67,8 +68,8 @@ if df is not None and not df.empty:
         
         The user wants to analyze: "{problem_statement}"
         
-        Generate Python code that:
-        - Loads the dataset
+        Generate a Python script that:
+        - Loads the dataset using pandas
         - Uses Matplotlib/Seaborn to generate the best visualization
         - Applies the given color palette: {color_palette}
         - Saves the plot as 'visualization.png'
@@ -78,11 +79,15 @@ if df is not None and not df.empty:
         try:
             response = model.generate_content(query)
             
-            # Ensure the response contains valid code
-            if not response.candidates or not response.candidates[0].content.parts:
+            # 🔹 Ensure the response contains valid code
+            if not response or not hasattr(response, "text") or not response.text.strip():
                 st.error("❌ Gemini AI did not return valid Python code.")
             else:
-                generated_code = response.text
+                generated_code = response.text.strip()
+
+                # 🔹 Clean unwanted Markdown formatting
+                generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
+                generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
                 # 🔹 Save the code safely
                 script_path = "generated_visualization.py"
@@ -90,14 +95,17 @@ if df is not None and not df.empty:
                     f.write(generated_code)
 
                 # 🔹 Run the script safely
-                exec(open(script_path).read(), globals())
+                try:
+                    exec(open(script_path).read(), globals())
 
-                # 🔹 Display the Visualization
-                if os.path.exists("visualization.png"):
-                    st.image("visualization.png", caption="Generated Visualization", use_column_width=True)
-                else:
-                    st.error("❌ The visualization was not generated successfully.")
+                    # 🔹 Display the Visualization
+                    if os.path.exists("visualization.png"):
+                        st.image("visualization.png", caption="Generated Visualization", use_column_width=True)
+                    else:
+                        st.error("❌ The visualization was not generated successfully.")
+
+                except Exception as e:
+                    st.error(f"❌ Error executing generated script: {e}")
 
         except Exception as e:
             st.error(f"❌ Error generating visualization: {e}")
-
