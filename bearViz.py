@@ -55,7 +55,6 @@ if uploaded_file:
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    # **Read Different File Types**
     if file_name.endswith(".csv"):
         df = pd.read_csv(file_path)
     elif file_name.endswith((".xlsx", ".xls")):
@@ -65,7 +64,7 @@ if uploaded_file:
     elif file_name.endswith(".pdf"):
         with pdfplumber.open(file_path) as pdf:
             all_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
-        df = pd.DataFrame({"Extracted_Text": all_text.split("\n")})  # Convert text into DataFrame
+        df = pd.DataFrame({"Extracted_Text": all_text.split("\n")})
 
 elif api_url:
     try:
@@ -102,6 +101,7 @@ if df is not None and not df.empty:
         - Loads the dataset correctly using pandas
         - Uses Plotly to generate an **interactive visualization**
         - Includes **hover tooltips** that dynamically display relevant **units** (like currency, count, percentage)
+        - Ensures tooltips display relevant column names and values dynamically
         - Applies the given color palette: {color_palette}
         - Saves the plot as 'visualization.png'
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
@@ -111,30 +111,23 @@ if df is not None and not df.empty:
         try:
             response = model.generate_content(query)
 
-            # 🔹 Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
                 st.error("❌ Gemini AI did not return valid Python code.")
                 st.stop()
 
             generated_code = response.text.strip()
-
-            # 🔹 Clean unwanted Markdown formatting
             generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
             generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
-            # 🔹 Print generated code for debugging
             print("\n🔹 Generated Python Code:\n", generated_code)
 
-            # 🔹 Save the code safely
             script_path = "generated_visualization.py"
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(generated_code)
 
-            # 🔹 Run the script safely
             try:
                 exec(open(script_path).read(), globals())
 
-                # 🔹 Display the Visualization
                 if os.path.exists("visualization.png"):
                     st.image("visualization.png", caption="Generated Visualization", use_container_width=True)
                 else:
