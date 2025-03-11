@@ -5,8 +5,16 @@ import plotly.express as px
 import requests
 import re
 import os
-from colorthief import ColorThief
 import subprocess
+from colorthief import ColorThief
+
+# 🔹 Install required dependencies automatically
+required_packages = ["pandas", "plotly", "matplotlib", "seaborn", "google-generativeai"]
+for package in required_packages:
+    try:
+        __import__(package)
+    except ImportError:
+        subprocess.run(["pip", "install", package], check=True)
 
 # 🔹 Load API key securely from Streamlit Secrets
 API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -15,7 +23,8 @@ API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
-st.title("🐻📊 **BearViz**")
+# 🔹 Title with BearViz Logo
+st.markdown("<h1 style='text-align: center;'>🐻📊 <b>BearViz - AI-Powered Dashboard</b></h1>", unsafe_allow_html=True)
 
 # 🔹 File Upload
 uploaded_file = st.file_uploader("Upload CSV or Excel File", type=["csv", "xlsx"])
@@ -72,12 +81,14 @@ if df is not None and not df.empty:
 
     # 🔹 Accept multiple problem statements for dashboard
     st.write("📝 **Enter Your Analysis Questions** (One per line)")
-    problem_statements = st.text_area("Example: Sales vs Region, Region vs Sale Category").strip().split("\n")
+    problem_statements = st.text_area("Example: Sales vs Region, Region vs Sale Category").split("\n")
 
     if st.button("Generate Dashboard"):
         st.write("📡 Generating multiple visualizations...")
 
-        # 🔹 Single API Call for All Visualizations
+        col1, col2 = st.columns(2)  # Two-column layout for dashboard
+
+        # 🔹 Combine all problems into a single API call (Optimized)
         query = f"""
         Given this dataset summary:
         {df.describe().to_string()}
@@ -86,31 +97,37 @@ if df is not None and not df.empty:
         {problem_statements}
 
         Generate Python scripts that:
+        - Only contain executable Python code (NO Markdown, NO explanations)
         - Load the dataset correctly using pandas
         - Use Plotly to create interactive visualizations
         - Save the plots as 'visualization_1.png', 'visualization_2.png', etc.
-        - Return multiple Python code blocks for each visualization.
+        - Avoid using Markdown-style comments or explanations
+        - The script must be complete and executable as a standalone Python file
         """
 
         try:
             response = model.generate_content(query)
 
+            # 🔹 Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
-                st.error("❌ No valid code returned from Gemini AI")
+                st.error("❌ Gemini AI did not return valid Python code.")
                 st.stop()
 
             generated_codes = response.text.strip().split("```python")[1:]  # Extract multiple code blocks
 
-            # 🔹 Generate and Execute Multiple Visualizations
-            col1, col2 = st.columns(2)  # Dashboard Layout
             for i, code_block in enumerate(generated_codes):
                 generated_code = code_block.strip().replace("```", "")
+
+                # Ensure the code does not contain Markdown formatting
+                if "**" in generated_code or "#" in generated_code:
+                    st.error(f"❌ Generated code for visualization {i+1} contains Markdown/explanations. Skipping execution.")
+                    continue
 
                 script_path = f"generated_viz_{i}.py"
                 with open(script_path, "w", encoding="utf-8") as f:
                     f.write(generated_code)
 
-                # 🔹 Run each script separately
+                # 🔹 Run each script as a separate process
                 try:
                     subprocess.run(["python", script_path], check=True)
 
@@ -122,8 +139,8 @@ if df is not None and not df.empty:
                     else:
                         st.error(f"❌ Visualization failed for analysis {i+1}")
 
-                except Exception as e:
+                except subprocess.CalledProcessError as e:
                     st.error(f"❌ Error executing visualization {i+1}: {e}")
 
         except Exception as e:
-            st.error(f"❌ Error generating dashboard: {e}")
+            st.error(f"❌ Error generating visualization: {e}")
