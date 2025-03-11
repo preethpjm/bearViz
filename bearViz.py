@@ -8,51 +8,51 @@ import re
 import os
 from colorthief import ColorThief
 
-# 🔹 Load API key securely from Streamlit Secrets (Better for Cloud Deployment)
-API_KEY = st.secrets["GEMINI_API_KEY"]  # Ensure it's set in Streamlit Secrets
+# Load API key from Streamlit Secrets
+API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# 🔹 Configure Gemini AI
+# Configure Gemini
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
 st.title("🐻📊 **BearViz**")
 
-# 🔹 File Upload
+# File Upload
 uploaded_file = st.file_uploader("Upload CSV or Excel File", type=["csv", "xlsx"])
 
-# 🔹 API Data Fetching
+# API Data Fetching
 api_url = st.text_input("Enter API URL for Live Data")
 
-# 🔹 Image Upload for Color Extraction
+# Image Upload
 uploaded_image = st.file_uploader("Upload an Image for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
 
-# 🔹 Extract Color Theme
+# Extract Color Palette
 def extract_colors(image):
     color_thief = ColorThief(image)
     palette = color_thief.get_palette(color_count=5)
     return ["#{:02x}{:02x}{:02x}".format(*color) for color in palette]
 
-color_palette = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]  # Default Colors
+color_palette = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]
 if uploaded_image:
     color_palette = extract_colors(uploaded_image)
     st.write("🎨 **Extracted Colors:**")
-    # Create color swatch display using Markdown & HTML
+    # Create color swatch
     color_html = "".join(
         f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>"
         for color in color_palette
     )
     st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
 
-# 🔹 Load Data from File or API
+# Load Data from File or API
 df = None
 file_name = None
 
 if uploaded_file:
     file_name = uploaded_file.name
-    file_path = os.path.join("data", file_name)  # Save in 'data/' directory
-    os.makedirs("data", exist_ok=True)  # Ensure directory exists
+    file_path = os.path.join("data", file_name)
+    os.makedirs("data", exist_ok=True)
 
-    # Save uploaded file locally
+    # Save file
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
@@ -65,22 +65,22 @@ elif api_url:
         df = pd.DataFrame(response.json())
         file_name = "live_data.csv"
         file_path = os.path.join("data", file_name)
-        df.to_csv(file_path, index=False)  # Save API data for processing
+        df.to_csv(file_path, index=False)
     except Exception as e:
         st.error(f"❌ API Fetch Failed: {e}")
 
-# 🔹 If Data is Loaded, Display & Analyze
+# Display & Analyze Data
 if df is not None and not df.empty:
     st.write("### Dataset Preview")
     st.dataframe(df.head())
 
-    # 🔹 Ask for Problem Statement
+    # Ask for Problem Statement
     problem_statement = st.text_input("What do you want to analyze?", "Example: Sales trend over time")
 
     if st.button("Generate Visualization"):
-        st.write("📡 Sending request to Gemini AI...")
+        st.write("📡📡📡 Sending request to Gemini AI...")
 
-        # 🔹 Generate Visualization Using Gemini AI
+        # Generate Visualization
         query = f"""
         Given this dataset summary:
         {df.describe().to_string()}
@@ -101,30 +101,29 @@ if df is not None and not df.empty:
         try:
             response = model.generate_content(query)
 
-            # 🔹 Ensure the response contains valid code
+            # Code Validation
             if not response or not hasattr(response, "text") or not response.text.strip():
                 st.error("❌ Gemini AI did not return valid Python code.")
                 st.stop()
 
             generated_code = response.text.strip()
 
-            # 🔹 Clean unwanted Markdown formatting
+            # Cleaning
             generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
             generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
-            # 🔹 Print generated code for debugging
             print("\n🔹 Generated Python Code:\n", generated_code)
 
-            # 🔹 Save the code safely
+            # Save the code
             script_path = "generated_visualization.py"
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(generated_code)
 
-            # 🔹 Run the script safely
+            # Run the script
             try:
                 exec(open(script_path).read(), globals())
 
-                # 🔹 Display the Visualization
+                # Display the Visualization
                 if os.path.exists("visualization.png"):
                     st.image("visualization.png", caption="Generated Visualization", use_container_width=True)
                 else:
