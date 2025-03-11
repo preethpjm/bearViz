@@ -69,7 +69,7 @@ if df is not None and not df.empty:
     problem_statement = st.text_input("What do you want to analyze?", "Example: Sales trend over time")
 
     if st.button("Generate Visualization"):
-        st.write("📡 Sending request to Gemini AI...")
+        st.write("💽 Sending request to Gemini AI...")
 
         # 🔹 Generate Visualization Using Gemini AI
         query = f"""
@@ -84,7 +84,7 @@ if df is not None and not df.empty:
         - Loads the dataset correctly using pandas
         - Uses Plotly to generate an **interactive visualization**
         - Includes **hover tooltips** that dynamically display relevant **units** (like currency, count, percentage)
-        - Applies a color palette that will be determined dynamically after code generation
+        - Determines the number of distinct colors needed dynamically
         - Saves the plot as 'visualization.png'
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
         - Do NOT include explanations or Markdown formatting, only return runnable Python code.
@@ -96,42 +96,41 @@ if df is not None and not df.empty:
             generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
             generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
-            # 🔹 Save the code safely
             script_path = "generated_visualization.py"
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(generated_code)
 
-            # 🔹 Run the script safely
-            try:
-                exec(open(script_path).read(), globals())
+            exec(open(script_path).read(), globals())
 
-                # 🔹 Prompt for Image Upload After Code Generation
+            if os.path.exists("visualization.png"):
+                st.image("visualization.png", caption="Generated Visualization", use_container_width=True)
+
+                # 🔹 Image Upload for Color Extraction (AFTER Gemini AI Response)
                 uploaded_image = st.file_uploader("Upload an Image for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
-
+                
                 # 🔹 Extract Color Theme
-                def extract_colors(image, num_colors):
+                def extract_colors(image, required_colors):
                     color_thief = ColorThief(image)
-                    palette = color_thief.get_palette(color_count=num_colors)
-                    return ["#{:02x}{:02x}{:02x}".format(*color) for color in palette]
+                    palette = color_thief.get_palette(color_count=min(required_colors, 10))
+                    
+                    while len(palette) < required_colors:
+                        generated_color = tuple(random.randint(0, 255) for _ in range(3))
+                        palette.append(generated_color)
+                    
+                    return ["#{:02x}{:02x}{:02x}".format(*color) for color in palette[:required_colors]]
 
-                default_colors = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]
-                required_colors = 5  # This should be dynamically inferred from the visualization
+                default_palette = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]
+                color_palette = default_palette
 
                 if uploaded_image:
-                    extracted_colors = extract_colors(uploaded_image, min(required_colors, 5))
-                    if len(extracted_colors) < required_colors:
-                        additional_colors = ["#{:02x}{:02x}{:02x}".format(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in range(required_colors - len(extracted_colors))]
-                        extracted_colors.extend(additional_colors)
-                    color_palette = extracted_colors
-                else:
-                    color_palette = default_colors
-
-                st.write("🎨 **Selected Color Palette:**")
-                color_html = "".join(f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>" for color in color_palette)
-                st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
-
-            except Exception as e:
-                st.error(f"❌ Error executing generated script: {e}")
+                    required_colors = generated_code.count("color=")
+                    color_palette = extract_colors(uploaded_image, required_colors)
+                    st.write("🎨 **Extracted Colors:**")
+                    color_html = "".join(
+                        f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>"
+                        for color in color_palette
+                    )
+                    st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
 
         except Exception as e:
             st.error(f"❌ Error generating visualization: {e}")
