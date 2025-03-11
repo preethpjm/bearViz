@@ -8,8 +8,15 @@ import re
 import os
 from colorthief import ColorThief
 
+# 🔹 Load API key securely from environment variable
+API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not API_KEY:
+    st.error("❌ Missing API Key! Set GEMINI_API_KEY as an environment variable.")
+    st.stop()  # Stop execution if API key is missing
+
 # 🔹 Configure Gemini AI
-genai.configure(api_key=os.getenv("AIzaSyBY_NygxPdVVWfTp5wH_cuhdUp26H7WqTg"))  # Load API key securely from environment variable
+genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
 st.title("📊 AI-Powered Data Visualization")
@@ -59,7 +66,7 @@ if df is not None and not df.empty:
     problem_statement = st.text_input("What do you want to analyze?", "Example: Sales trend over time")
 
     if st.button("Generate Visualization"):
-        st.write("🔄 Generating visualization using Gemini AI...")
+        st.write("📡 Sending request to Gemini AI...")
 
         # 🔹 Generate Visualization Using Gemini AI
         query = f"""
@@ -81,41 +88,43 @@ if df is not None and not df.empty:
 
         try:
             response = model.generate_content(query)
-            
+
             # 🔹 Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
                 st.error("❌ Gemini AI did not return valid Python code.")
-            else:
-                generated_code = response.text.strip()
+                st.stop()
 
-                # 🔹 Clean unwanted Markdown formatting
-                generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
-                generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
+            generated_code = response.text.strip()
 
-                # 🔹 Print generated code for debugging
-                st.text_area("Generated Code", generated_code, height=250)
+            # 🔹 Clean unwanted Markdown formatting
+            generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
+            generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
-                # 🔹 Save the code safely
-                script_path = "generated_visualization.py"
-                with open(script_path, "w", encoding="utf-8") as f:
-                    f.write(generated_code)
+            # 🔹 Print generated code for debugging
+            st.text_area("Generated Code", generated_code, height=250)
 
-                # 🔹 Check if dataset exists before running the script
-                if not os.path.exists(file_name):
-                    st.error(f"❌ Error: The dataset '{file_name}' was not found.")
+            # 🔹 Save the code safely
+            script_path = "generated_visualization.py"
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(generated_code)
+
+            # 🔹 Check if dataset exists before running the script
+            if not os.path.exists(file_name):
+                st.error(f"❌ Error: The dataset '{file_name}' was not found.")
+                st.stop()
+
+            # 🔹 Run the script safely
+            try:
+                exec(open(script_path).read(), globals())
+
+                # 🔹 Display the Visualization
+                if os.path.exists("visualization.png"):
+                    st.image("visualization.png", caption="Generated Visualization", use_column_width=True)
                 else:
-                    # 🔹 Run the script safely
-                    try:
-                        exec(open(script_path).read(), globals())
+                    st.error("❌ The visualization was not generated successfully.")
 
-                        # 🔹 Display the Visualization
-                        if os.path.exists("visualization.png"):
-                            st.image("visualization.png", caption="Generated Visualization", use_column_width=True)
-                        else:
-                            st.error("❌ The visualization was not generated successfully.")
-
-                    except Exception as e:
-                        st.error(f"❌ Error executing generated script: {e}")
+            except Exception as e:
+                st.error(f"❌ Error executing generated script: {e}")
 
         except Exception as e:
             st.error(f"❌ Error generating visualization: {e}")
