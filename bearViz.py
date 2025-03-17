@@ -18,12 +18,12 @@ model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
 # Title
 st.image("Logo1(BearViz).png", width=300)
-
+st.markdown("### Unleash the power of data with smart and interactive visualizations! 🚀")
 # File Upload
 uploaded_file = st.file_uploader("Upload **CSV**, **Excel**, **TXT**, or **PDF** File", type=["csv", "xlsx", "txt", "pdf"])
 
 # API Data Fetching
-api_url = st.text_input("Enter API URL for Live Data")
+api_url = st.text_input("Enter **API URL** for Live Data")
 
 # Image Upload for Color Extraction
 uploaded_image = st.file_uploader("Upload an **Image** for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
