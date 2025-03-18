@@ -120,9 +120,9 @@ if df is not None and not df.empty:
         - Loads the dataset using pandas
         - Uses **Plotly** to create an **interactive visualization**
         - Enables **hover tooltips** with dynamically relevant units (like currency, count, percentage)
-        - Uses plotly.express and **returns a fig object instead of saving an image**
+        - Uses `plotly.express` and **returns a `fig` object instead of saving an image**
         - Uses the given color palette: {color_palette}
-        - **Do NOT save the figure as an image**; just return fig
+        - **Do NOT save the figure as an image**; just return `fig`
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
         - Do NOT include explanations or Markdown formatting, only return runnable Python code.
         """
@@ -139,8 +139,8 @@ if df is not None and not df.empty:
             generated_code = response.text.strip()
 
             # Clean unwanted Markdown formatting
-            generated_code = re.sub(r"^python", "", generated_code, flags=re.MULTILINE)
-            generated_code = re.sub(r"$", "", generated_code, flags=re.MULTILINE)
+            generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
+            generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
             # Generated code for debugging
             print("\n Generated Python Code:\n", generated_code)
@@ -154,7 +154,7 @@ if df is not None and not df.empty:
             local_vars = {}
             exec(generated_code, globals(), local_vars)
 
-            # Extract fig from the executed script
+            # Extract `fig` from the executed script
             if "fig" in local_vars:
                 st.plotly_chart(local_vars["fig"], use_container_width=True)
             else:
@@ -164,3 +164,4 @@ if df is not None and not df.empty:
         except Exception as e:
             print(f"\n ❌ Error generating visualization: {e}")
             st.error("⚠️ Our servers are currently experiencing high traffic. Please try again later.")
+            
