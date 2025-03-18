@@ -12,14 +12,13 @@ from colorthief import ColorThief
 # Loading API key from Streamlit Secrets
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# Gemini Configuration
+# Gemni Configuration
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
 # Title
 st.image("Logo1(BearViz).png", width=300)
 st.markdown("### Transform data into insights, effortlessly!")
-
 # File Upload
 uploaded_file = st.file_uploader("Upload **CSV**, **Excel**, **TXT**, or **PDF** File", type=["csv", "xlsx", "txt", "pdf"])
 
@@ -48,40 +47,19 @@ def extract_colors(image, required_colors):
     return extracted_hex[:required_colors]
 
 # Default Color Palette
-if "selected_colors" not in st.session_state:
-    st.session_state["selected_colors"] = []
+color_palette = st.session_state.get("color_palette", ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"])
 
 if uploaded_image:
     required_colors = 8
-    extracted_colors = extract_colors(uploaded_image, required_colors)
-    st.session_state["extracted_colors"] = extracted_colors
+    color_palette = extract_colors(uploaded_image, required_colors)
+    st.session_state["color_palette"] = color_palette
 
-    st.write("🎨 **Extracted Colors:** (Click to Select/Deselect)")
-
-    # Display colors as clickable swatches (horizontally)
-    color_buttons = ""
-    for color in extracted_colors:
-        is_selected = color in st.session_state["selected_colors"]
-        border = "3px solid black" if is_selected else "3px solid transparent"
-
-        # Toggle Selection
-        if st.button("", key=color, help=color):
-            if is_selected:
-                st.session_state["selected_colors"].remove(color)
-            else:
-                st.session_state["selected_colors"].append(color)
-
-        # Append styled color box
-        color_buttons += f"""
-            <div style="
-                width: 40px; height: 40px; display: inline-block; margin: 5px; 
-                background-color: {color}; border: {border}; 
-                cursor: pointer; transition: 0.2s;">
-            </div>
-        """
-
-    # Show clickable color swatches
-    st.markdown(f"<div style='display: flex; flex-wrap: wrap;'>{color_buttons}</div>", unsafe_allow_html=True)
+    st.write("🎨 **Extracted Colors:**")
+    color_html = "".join(
+        f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>"
+        for color in color_palette
+    )
+    st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
 
 # Load Data from File or API
 df = None
@@ -143,7 +121,7 @@ if df is not None and not df.empty:
         - Uses **Plotly** to create an **interactive visualization**
         - Enables **hover tooltips** with dynamically relevant units (like currency, count, percentage)
         - Uses plotly.express and **returns a fig object instead of saving an image**
-        - Uses the given color palette: {st.session_state["selected_colors"]}
+        - Uses the given color palette: {color_palette}
         - **Do NOT save the figure as an image**; just return fig
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
         - Do NOT include explanations or Markdown formatting, only return runnable Python code.
