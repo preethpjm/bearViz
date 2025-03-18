@@ -9,18 +9,18 @@ import pdfplumber
 import random
 from colorthief import ColorThief
 
-# Load API key from Streamlit secrets
+# Loading API key from Streamlit Secrets
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# Gemini AI Configuration
+# Gemini Configuration
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
-# Title & Branding
+# Title
 st.image("Logo1(BearViz).png", width=300)
 st.markdown("### Transform data into insights, effortlessly!")
 
-# File Upload for Data
+# File Upload
 uploaded_file = st.file_uploader("Upload **CSV**, **Excel**, **TXT**, or **PDF** File", type=["csv", "xlsx", "txt", "pdf"])
 
 # API Data Fetching
@@ -30,12 +30,12 @@ api_url = st.text_input("Enter **API URL** for Live Data")
 uploaded_image = st.file_uploader("Upload an **Image** for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
 
 # Extract Colors & Generate Additional Colors
-def extract_colors(image, required_colors=8):
+def extract_colors(image, required_colors):
     color_thief = ColorThief(image)
     extracted_colors = color_thief.get_palette(color_count=min(required_colors, 10))
     extracted_hex = ["#{:02x}{:02x}{:02x}".format(*color) for color in extracted_colors]
 
-    # Generate additional colors if needed
+    # If more colors are needed, Generate colors
     while len(extracted_hex) < required_colors:
         base_color = extracted_hex[len(extracted_hex) % len(extracted_hex)]
         new_color = "#{:02x}{:02x}{:02x}".format(
@@ -52,47 +52,41 @@ if "selected_colors" not in st.session_state:
     st.session_state["selected_colors"] = []
 
 if uploaded_image:
-    extracted_colors = extract_colors(uploaded_image, 8)
+    required_colors = 8
+    extracted_colors = extract_colors(uploaded_image, required_colors)
     st.session_state["extracted_colors"] = extracted_colors
 
     st.write("🎨 **Extracted Colors:** (Click to Select/Deselect)")
 
-    # Clickable color swatches
-    selected_colors = st.session_state["selected_colors"]
-    color_selection = []
-    
+    # Display colors as clickable swatches (horizontally)
+    color_buttons = ""
     for color in extracted_colors:
-        is_selected = color in selected_colors
-        border_color = "black" if is_selected else "gray"
-        
+        is_selected = color in st.session_state["selected_colors"]
+        border = "3px solid black" if is_selected else "3px solid transparent"
+
+        # Toggle Selection
         if st.button("", key=color, help=color):
             if is_selected:
-                selected_colors.remove(color)
+                st.session_state["selected_colors"].remove(color)
             else:
-                selected_colors.append(color)
-        
-        color_selection.append(f"""
+                st.session_state["selected_colors"].append(color)
+
+        # Append styled color box
+        color_buttons += f"""
             <div style="
                 width: 40px; height: 40px; display: inline-block; margin: 5px; 
-                background-color: {color}; border: 3px solid {border_color}; 
-                border-radius: 5px; cursor: pointer;"
-                onclick="window.location.reload();">
+                background-color: {color}; border: {border}; 
+                cursor: pointer; transition: 0.2s;">
             </div>
-        """)
-    
-    st.markdown(f"<div style='display: flex; flex-wrap: wrap;'>{''.join(color_selection)}</div>", unsafe_allow_html=True)
+        """
 
-# Selected Colors Display
-if selected_colors:
-    st.write("✅ **Selected Colors:**")
-    selected_html = "".join(
-        f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border: 3px solid black; border-radius: 5px;'></div>"
-        for color in selected_colors
-    )
-    st.markdown(f"<div style='display: flex;'>{selected_html}</div>", unsafe_allow_html=True)
+    # Show clickable color swatches
+    st.markdown(f"<div style='display: flex; flex-wrap: wrap;'>{color_buttons}</div>", unsafe_allow_html=True)
 
 # Load Data from File or API
 df = None
+file_name = None
+
 if uploaded_file:
     file_name = uploaded_file.name
     file_path = os.path.join("data", file_name)
@@ -117,21 +111,25 @@ elif api_url:
         response = requests.get(api_url)
         response.raise_for_status()
         df = pd.DataFrame(response.json())
-    except Exception:
-        st.error("⚠️ Error processing the dataset. Ensure it is in a valid format and try again.")
+        file_name = "live_data.csv"
+        file_path = os.path.join("data", file_name)
+        df.to_csv(file_path, index=False)
+    except Exception as e:
+        print(f"\n ❌ API Fetch Failed: {e}")
+        st.error("⚠️ Error processing the uploaded dataset. Ensure it is in a valid format and try again.")
 
-# Display Data & Generate Visualization
+# Analyse and display loaded Data
 if df is not None and not df.empty:
     st.write("### Dataset Preview")
     st.dataframe(df.head())
 
-    # Problem Statement
+    # Prompt the Problem statement
     problem_statement = st.text_input("What do you want to analyze?", "Example: Sales trend over time")
 
     if st.button("Generate Visualization"):
         st.write("📊 Creating your interactive chart...")
 
-        # Generate Visualization Using Gemini AI
+        # Generate Visualization Using Gemini
         query = f"""
         Given this dataset summary:
         {df.describe().to_string()}
@@ -144,9 +142,9 @@ if df is not None and not df.empty:
         - Loads the dataset using pandas
         - Uses **Plotly** to create an **interactive visualization**
         - Enables **hover tooltips** with dynamically relevant units (like currency, count, percentage)
-        - Uses `plotly.express` and **returns a `fig` object instead of saving an image**
-        - Uses the selected color palette: {selected_colors}
-        - **Do NOT save the figure as an image**; just return `fig`
+        - Uses plotly.express and **returns a fig object instead of saving an image**
+        - Uses the given color palette: {st.session_state["selected_colors"]}
+        - **Do NOT save the figure as an image**; just return fig
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
         - Do NOT include explanations or Markdown formatting, only return runnable Python code.
         """
@@ -154,22 +152,37 @@ if df is not None and not df.empty:
         try:
             response = model.generate_content(query)
 
+            # Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
+                print("\n ❌ Gemini AI did not return valid Python code.")
                 st.error("⚠️ Our servers are currently experiencing high traffic. Please try again later.")
                 st.stop()
 
             generated_code = response.text.strip()
-            generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
-            generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
+
+            # Clean unwanted Markdown formatting
+            generated_code = re.sub(r"^python", "", generated_code, flags=re.MULTILINE)
+            generated_code = re.sub(r"$", "", generated_code, flags=re.MULTILINE)
+
+            # Generated code for debugging
+            print("\n Generated Python Code:\n", generated_code)
+
+            # Save code
+            script_path = "generated_visualization.py"
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(generated_code)
 
             # Execute the script & retrieve the Plotly figure
             local_vars = {}
             exec(generated_code, globals(), local_vars)
 
+            # Extract fig from the executed script
             if "fig" in local_vars:
                 st.plotly_chart(local_vars["fig"], use_container_width=True)
             else:
+                print("\n ❌ The generated code did not return a valid Plotly figure.")
                 st.error("⚠️ The requested chart is invalid. Please try again with different inputs.")
 
-        except Exception:
+        except Exception as e:
+            print(f"\n ❌ Error generating visualization: {e}")
             st.error("⚠️ Our servers are currently experiencing high traffic. Please try again later.")
