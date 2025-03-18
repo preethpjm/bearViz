@@ -12,13 +12,14 @@ from colorthief import ColorThief
 # Loading API key from Streamlit Secrets
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# Gemni Configuration
+# Gemini Configuration
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
 # Title
 st.image("Logo1(BearViz).png", width=300)
-st.markdown("### Transform data into insights, effortlessly! 📊")
+st.markdown("### Transform data into insights, effortlessly!")
+
 # File Upload
 uploaded_file = st.file_uploader("Upload **CSV**, **Excel**, **TXT**, or **PDF** File", type=["csv", "xlsx", "txt", "pdf"])
 
@@ -47,19 +48,24 @@ def extract_colors(image, required_colors):
     return extracted_hex[:required_colors]
 
 # Default Color Palette
-color_palette = st.session_state.get("color_palette", ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"])
+if "color_palette" not in st.session_state:
+    st.session_state["color_palette"] = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6"]
 
 if uploaded_image:
     required_colors = 8
-    color_palette = extract_colors(uploaded_image, required_colors)
-    st.session_state["color_palette"] = color_palette
-
-    st.write("🎨 **Extracted Colors:**")
+    extracted_colors = extract_colors(uploaded_image, required_colors)
+    st.session_state["color_palette"] = extracted_colors
+    
+    st.write("🎨 **Extracted Colors:** Click to select colors")
+    selected_colors = st.multiselect("Choose Colors", extracted_colors, default=extracted_colors[:4])
+    
     color_html = "".join(
         f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>"
-        for color in color_palette
+        for color in selected_colors
     )
     st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
+    
+    st.session_state["selected_colors"] = selected_colors
 
 # Load Data from File or API
 df = None
@@ -82,7 +88,7 @@ if uploaded_file:
     elif file_name.endswith(".pdf"):
         with pdfplumber.open(file_path) as pdf:
             all_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
-        df = pd.DataFrame({"Extracted_Text": all_text.split("\n")})  # Convert text into DataFrame
+        df = pd.DataFrame({"Extracted_Text": all_text.split("\n")})
 
 elif api_url:
     try:
@@ -92,8 +98,7 @@ elif api_url:
         file_name = "live_data.csv"
         file_path = os.path.join("data", file_name)
         df.to_csv(file_path, index=False)
-    except Exception as e:
-        print(f"\n ❌ API Fetch Failed: {e}")
+    except Exception:
         st.error("⚠️ Error processing the uploaded dataset. Ensure it is in a valid format and try again.")
 
 # Analyse and display loaded Data
@@ -121,47 +126,32 @@ if df is not None and not df.empty:
         - Uses **Plotly** to create an **interactive visualization**
         - Enables **hover tooltips** with dynamically relevant units (like currency, count, percentage)
         - Uses `plotly.express` and **returns a `fig` object instead of saving an image**
-        - Uses the given color palette: {color_palette}
+        - Uses the given color palette: {st.session_state["selected_colors"]}
         - **Do NOT save the figure as an image**; just return `fig`
-        - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
-        - Do NOT include explanations or Markdown formatting, only return runnable Python code.
         """
 
         try:
             response = model.generate_content(query)
 
-            # Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
-                print("\n ❌ Gemini AI did not return valid Python code.")
                 st.error("⚠️ Our servers are currently experiencing high traffic. Please try again later.")
                 st.stop()
 
             generated_code = response.text.strip()
-
-            # Clean unwanted Markdown formatting
             generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
             generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
 
-            # Generated code for debugging
-            print("\n Generated Python Code:\n", generated_code)
-
-            # Save code
             script_path = "generated_visualization.py"
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(generated_code)
 
-            # Execute the script & retrieve the Plotly figure
             local_vars = {}
             exec(generated_code, globals(), local_vars)
 
-            # Extract `fig` from the executed script
             if "fig" in local_vars:
                 st.plotly_chart(local_vars["fig"], use_container_width=True)
             else:
-                print("\n ❌ The generated code did not return a valid Plotly figure.")
                 st.error("⚠️ The requested chart is invalid. Please try again with different inputs.")
 
-        except Exception as e:
-            print(f"\n ❌ Error generating visualization: {e}")
+        except Exception:
             st.error("⚠️ Our servers are currently experiencing high traffic. Please try again later.")
-            
