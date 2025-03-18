@@ -9,18 +9,18 @@ import pdfplumber
 import random
 from colorthief import ColorThief
 
-# Loading API key from Streamlit Secrets
+# Load API key from Streamlit secrets
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# Gemni Configuration
+# Gemini AI Configuration
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel("gemini-1.5-pro-latest")
 
-# Title
+# Title & Branding
 st.image("Logo1(BearViz).png", width=300)
 st.markdown("### Transform data into insights, effortlessly!")
 
-# File Upload
+# File Upload for Data
 uploaded_file = st.file_uploader("Upload **CSV**, **Excel**, **TXT**, or **PDF** File", type=["csv", "xlsx", "txt", "pdf"])
 
 # API Data Fetching
@@ -30,12 +30,12 @@ api_url = st.text_input("Enter **API URL** for Live Data")
 uploaded_image = st.file_uploader("Upload an **Image** for Color Theme (Optional)", type=["png", "jpg", "jpeg"])
 
 # Extract Colors & Generate Additional Colors
-def extract_colors(image, required_colors):
+def extract_colors(image, required_colors=8):
     color_thief = ColorThief(image)
     extracted_colors = color_thief.get_palette(color_count=min(required_colors, 10))
     extracted_hex = ["#{:02x}{:02x}{:02x}".format(*color) for color in extracted_colors]
 
-    # If more colors are needed, generate complementary ones
+    # Generate additional colors if needed
     while len(extracted_hex) < required_colors:
         base_color = extracted_hex[len(extracted_hex) % len(extracted_hex)]
         new_color = "#{:02x}{:02x}{:02x}".format(
@@ -47,48 +47,52 @@ def extract_colors(image, required_colors):
 
     return extracted_hex[:required_colors]
 
-# Color Selection Logic
+# Default Color Palette
 if "selected_colors" not in st.session_state:
-    st.session_state.selected_colors = []
+    st.session_state["selected_colors"] = []
 
 if uploaded_image:
-    required_colors = 8
-    extracted_colors = extract_colors(uploaded_image, required_colors)
-
-    # Initialize selection with all extracted colors if empty
-    if not st.session_state.selected_colors:
-        st.session_state.selected_colors = extracted_colors
+    extracted_colors = extract_colors(uploaded_image, 8)
+    st.session_state["extracted_colors"] = extracted_colors
 
     st.write("🎨 **Extracted Colors:** (Click to Select/Deselect)")
 
-    # Display color swatches as interactive buttons
-    selected_colors = st.session_state.selected_colors
-    new_selection = []
-
-    col1, col2 = st.columns(2)
-    for i, color in enumerate(extracted_colors):
-        col = col1 if i % 2 == 0 else col2
-        if col.button(f"🟢 {color}" if color in selected_colors else f"⚪ {color}", key=color):
-            if color in selected_colors:
-                selected_colors.remove(color)  # Remove if already selected
+    # Clickable color swatches
+    selected_colors = st.session_state["selected_colors"]
+    color_selection = []
+    
+    for color in extracted_colors:
+        is_selected = color in selected_colors
+        border_color = "black" if is_selected else "gray"
+        
+        if st.button("", key=color, help=color):
+            if is_selected:
+                selected_colors.remove(color)
             else:
-                selected_colors.append(color)  # Add if not selected
+                selected_colors.append(color)
+        
+        color_selection.append(f"""
+            <div style="
+                width: 40px; height: 40px; display: inline-block; margin: 5px; 
+                background-color: {color}; border: 3px solid {border_color}; 
+                border-radius: 5px; cursor: pointer;"
+                onclick="window.location.reload();">
+            </div>
+        """)
+    
+    st.markdown(f"<div style='display: flex; flex-wrap: wrap;'>{''.join(color_selection)}</div>", unsafe_allow_html=True)
 
-    # Update session state
-    st.session_state.selected_colors = selected_colors
-
-    # Display selected colors
+# Selected Colors Display
+if selected_colors:
     st.write("✅ **Selected Colors:**")
-    color_html = "".join(
-        f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border-radius: 5px;'></div>"
-        for color in st.session_state.selected_colors
+    selected_html = "".join(
+        f"<div style='width: 40px; height: 40px; display: inline-block; margin: 5px; background-color: {color}; border: 3px solid black; border-radius: 5px;'></div>"
+        for color in selected_colors
     )
-    st.markdown(f"<div style='display: flex;'>{color_html}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='display: flex;'>{selected_html}</div>", unsafe_allow_html=True)
 
 # Load Data from File or API
 df = None
-file_name = None
-
 if uploaded_file:
     file_name = uploaded_file.name
     file_path = os.path.join("data", file_name)
@@ -113,24 +117,21 @@ elif api_url:
         response = requests.get(api_url)
         response.raise_for_status()
         df = pd.DataFrame(response.json())
-        file_name = "live_data.csv"
-        file_path = os.path.join("data", file_name)
-        df.to_csv(file_path, index=False)
     except Exception:
-        st.error("⚠️ Error processing the uploaded dataset. Ensure it is in a valid format and try again.")
+        st.error("⚠️ Error processing the dataset. Ensure it is in a valid format and try again.")
 
-# Analyse and display loaded Data
+# Display Data & Generate Visualization
 if df is not None and not df.empty:
     st.write("### Dataset Preview")
     st.dataframe(df.head())
 
-    # Prompt the Problem statement
+    # Problem Statement
     problem_statement = st.text_input("What do you want to analyze?", "Example: Sales trend over time")
 
     if st.button("Generate Visualization"):
         st.write("📊 Creating your interactive chart...")
 
-        # Generate Visualization Using Gemini
+        # Generate Visualization Using Gemini AI
         query = f"""
         Given this dataset summary:
         {df.describe().to_string()}
@@ -144,7 +145,7 @@ if df is not None and not df.empty:
         - Uses **Plotly** to create an **interactive visualization**
         - Enables **hover tooltips** with dynamically relevant units (like currency, count, percentage)
         - Uses `plotly.express` and **returns a `fig` object instead of saving an image**
-        - Uses the selected color palette: {st.session_state.selected_colors}
+        - Uses the selected color palette: {selected_colors}
         - **Do NOT save the figure as an image**; just return `fig`
         - Do NOT assume a generic file name like 'dataset.csv'. Use "{file_path}" exactly.
         - Do NOT include explanations or Markdown formatting, only return runnable Python code.
@@ -153,27 +154,18 @@ if df is not None and not df.empty:
         try:
             response = model.generate_content(query)
 
-            # Ensure the response contains valid code
             if not response or not hasattr(response, "text") or not response.text.strip():
                 st.error("⚠️ Our servers are currently experiencing high traffic. Please try again later.")
                 st.stop()
 
             generated_code = response.text.strip()
-
-            # Clean unwanted Markdown formatting
             generated_code = re.sub(r"^```python", "", generated_code, flags=re.MULTILINE)
             generated_code = re.sub(r"```$", "", generated_code, flags=re.MULTILINE)
-
-            # Save code
-            script_path = "generated_visualization.py"
-            with open(script_path, "w", encoding="utf-8") as f:
-                f.write(generated_code)
 
             # Execute the script & retrieve the Plotly figure
             local_vars = {}
             exec(generated_code, globals(), local_vars)
 
-            # Extract `fig` from the executed script
             if "fig" in local_vars:
                 st.plotly_chart(local_vars["fig"], use_container_width=True)
             else:
